@@ -1,6 +1,8 @@
 import os
 import json
 import time
+import struct
+import zlib
 import logging
 from datetime import datetime
 
@@ -14,6 +16,63 @@ from comfy.cli_args import args
 import nodes
 
 logger = logging.getLogger("SaveImageWithCheck")
+
+
+def verify_png_integrity(filepath):
+    """验证 PNG 文件完整性：文件头、CRC 校验、IDAT 数据"""
+    with open(filepath, 'rb') as f:
+        # 1. 检查 PNG 文件头魔数
+        header = f.read(8)
+        if header != b'\x89PNG\r\n\x1a\n':
+            return False, "PNG 文件头损坏"
+
+        idat_data = bytearray()
+        idat_found = False
+
+        # 2. 遍历所有 chunk 检查 CRC
+        while True:
+            chunk_header = f.read(8)
+            if len(chunk_header) < 8:
+                break
+
+            length = struct.unpack('>I', chunk_header[:4])[0]
+            chunk_type = chunk_header[4:8]
+
+            chunk_data = f.read(length)
+            if len(chunk_data) < length:
+                return False, f"Chunk {chunk_type} 数据不完整"
+
+            stored_crc = f.read(4)
+            if len(stored_crc) < 4:
+                return False, f"Chunk {chunk_type} CRC 缺失"
+
+            # CRC 校验：type + data
+            calculated_crc = struct.pack('>I', zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF)
+            if stored_crc != calculated_crc:
+                return False, f"Chunk {chunk_type} CRC 校验失败"
+
+            # 收集 IDAT 数据
+            if chunk_type == b'IDAT':
+                idat_data.extend(chunk_data)
+                idat_found = True
+
+            # 遇到 IEND 结束
+            if chunk_type == b'IEND':
+                break
+
+        # 3. 检查 IDAT 数据
+        if not idat_data:
+            return False, "缺少 IDAT 图片数据"
+
+        # 尝试解压 IDAT 数据验证完整性
+        try:
+            decompressed = zlib.decompress(bytes(idat_data))
+            if len(decompressed) == 0:
+                return False, "IDAT 解压后数据为空"
+        except zlib.error as e:
+            return False, f"IDAT 数据解压失败: {e}"
+
+    return True, "OK"
 
 
 class SaveImageWithCheck:
@@ -90,8 +149,15 @@ class SaveImageWithCheck:
             # 检测图片完整性
             check_start = time.time()
             try:
+                # PIL 基础解码验证
                 with Image.open(full_path) as verify_img:
                     verify_img.load()
+
+                # PNG 完整性验证：文件头 + CRC + IDAT
+                ok, msg = verify_png_integrity(full_path)
+                if not ok:
+                    raise RuntimeError(f"PNG 完整性验证失败: {msg}")
+
                 check_duration = time.time() - check_start
                 file_size = os.path.getsize(full_path)
 
