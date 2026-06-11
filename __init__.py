@@ -1,7 +1,6 @@
 import os
 import json
 import time
-import logging
 from datetime import datetime
 
 from PIL import Image
@@ -12,8 +11,6 @@ import numpy as np
 import folder_paths
 from comfy.cli_args import args
 import nodes
-
-logger = logging.getLogger("SaveImageWithCheck")
 
 
 class SaveImageWithCheck:
@@ -61,9 +58,9 @@ class SaveImageWithCheck:
         timestamp = datetime.now().strftime("%H:%M:%S")
         total_count = len(images)
 
-        logs.append(f"[{timestamp}] 开始保存 {total_count} 张图片")
-        logs.append(f"输出目录: {full_output_folder}")
-        logs.append(f"文件前缀: {filename_prefix}")
+        logs.append(f"📷 [{timestamp}] 开始保存 {total_count} 张图片")
+        logs.append(f"📁 输出目录: {full_output_folder}")
+        logs.append(f"📝 文件前缀: {filename_prefix}")
         logs.append("")
 
         for (batch_number, image) in enumerate(images):
@@ -95,23 +92,18 @@ class SaveImageWithCheck:
                 check_duration = time.time() - check_start
                 file_size = os.path.getsize(full_path)
 
-                logs.append(f"[{batch_number + 1}/{total_count}] {file}")
-                logs.append(f"  保存: {save_duration:.2f}s | 检测: {check_duration:.2f}s")
-                logs.append(f"  尺寸: {img.size[0]}x{img.size[1]} | 大小: {file_size // 1024}KB")
-                logs.append(f"  状态: OK")
+                logs.append(f"  ✅ [{batch_number + 1}/{total_count}] {file}")
+                logs.append(f"     ⏱️ 保存 {save_duration:.2f}s | 检测 {check_duration:.2f}s")
+                logs.append(f"     📐 {img.size[0]}x{img.size[1]} | 💾 {file_size // 1024}KB")
                 logs.append("")
 
-                log_line = f"[SaveImage] [{batch_number + 1}/{total_count}] {file} | 保存 {save_duration:.2f}s | 检测 {check_duration:.2f}s | {img.size[0]}x{img.size[1]} | {file_size // 1024}KB | OK"
-                logger.info(log_line)
-                print(log_line)
+                print(f"[SaveImage] [{batch_number + 1}/{total_count}] {file} | 保存 {save_duration:.2f}s | 检测 {check_duration:.2f}s | {img.size[0]}x{img.size[1]} | {file_size // 1024}KB | OK")
             except Exception as e:
-                logs.append(f"[{batch_number + 1}/{total_count}] {file}")
-                logs.append(f"  状态: FAIL - {e}")
+                logs.append(f"  ❌ [{batch_number + 1}/{total_count}] {file}")
+                logs.append(f"     ⚠️ 检测失败: {e}")
                 logs.append("")
 
-                err_line = f"[SaveImage] [{batch_number + 1}/{total_count}] {file} | FAIL - {e}"
-                logger.error(err_line)
-                print(err_line)
+                print(f"[SaveImage] [{batch_number + 1}/{total_count}] {file} | FAIL - {e}")
                 raise RuntimeError(f"图片 {file} 保存后检测损坏: {e}")
 
             results.append({
@@ -121,10 +113,9 @@ class SaveImageWithCheck:
             })
             counter += 1
 
-        logs.append(f"保存完成: {total_count} 张图片全部通过检测")
+        logs.append(f"🎉 保存完成: {total_count} 张图片全部通过检测")
         log_text = "\n".join(logs)
 
-        logger.info(f"[SaveImage] 任务完成: {total_count} 张图片保存成功")
         print(f"[SaveImage] 任务完成: {total_count} 张图片保存成功")
 
         return {"ui": {"images": results}, "result": (log_text,)}
